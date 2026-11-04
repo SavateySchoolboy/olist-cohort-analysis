@@ -1,0 +1,55 @@
+-- =====================================================================
+-- Загрузка отзывов из исходного CSV в существующую public.order_reviews
+-- Запускать через psql из корня репозитория, а не как SQL в DBeaver.
+-- ВНИМАНИЕ: успешный запуск заменяет ВСЕ данные public.order_reviews.
+-- =====================================================================
+
+-- при первой ошибке остановить скрипт; незавершённая транзакция откатится
+\set ON_ERROR_STOP on
+
+BEGIN;
+
+-- исходный CSV содержит 7 полей, включая текст и заголовок отзыва
+-- временная таблица нужна для корректного чтения CSV целиком
+CREATE TEMP TABLE reviews_import (
+    review_id               text,
+    order_id                text,
+    review_score            integer,
+    review_comment_title    text,
+    review_comment_message  text,
+    review_creation_date    timestamp,
+    review_answer_timestamp timestamp
+) ON COMMIT DROP;
+
+-- команда psql: путь относительно папки, из которой запущен psql
+-- вся команда \copy должна оставаться на одной строке
+\copy reviews_import FROM 'data/raw/olist_order_reviews_dataset.csv' WITH (FORMAT csv, HEADER true, ENCODING 'UTF8')
+
+-- заменяем прежнюю загрузку; повторный запуск не накапливает дубли
+TRUNCATE TABLE public.order_reviews;
+
+-- сохраняем только 5 полей, нужных для дальнейшего анализа
+INSERT INTO public.order_reviews (
+    review_id,
+    order_id,
+    review_score,
+    review_creation_date,
+    review_answer_timestamp
+)
+SELECT
+    review_id,
+    order_id,
+    review_score,
+    review_creation_date,
+    review_answer_timestamp
+FROM reviews_import;
+
+-- фиксируем загрузку; временная таблица автоматически удаляется
+COMMIT;
+
+-- контрольный результат исходного Olist: 99 224 строки, оценки от 1 до 5
+SELECT
+    count(*) AS imported_rows,
+    min(review_score) AS min_score,
+    max(review_score) AS max_score
+FROM public.order_reviews;
