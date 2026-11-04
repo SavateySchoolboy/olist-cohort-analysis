@@ -198,6 +198,11 @@ review_answer_timestamp timestamp
 select count(*) from (select distinct o_r.review_id, o_r.order_id from order_reviews o_r);
 
 ALTER TABLE order_reviews ADD PRIMARY KEY (review_id, order_id);
+
+alter table order_reviews
+add foreign key (order_id) references orders (order_id);
+
+
 -- проверка после загрузки: число строк и границы оценок
 -- (для исходного CSV ожидается 99 224 строки, оценки от 1 до 5)
 select
